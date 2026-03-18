@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -18,7 +19,7 @@ interface Artist {
   isOnline: boolean;
 }
 
-export default function CreateAssignmentPage() {
+function CreateAssignmentForm() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const preselected  = searchParams.get("artistId") ?? "";
@@ -237,5 +238,13 @@ export default function CreateAssignmentPage() {
         </form>
       )}
     </DashboardLayout>
+  );
+}
+
+export default function CreateAssignmentPage() {
+  return (
+    <Suspense>
+      <CreateAssignmentForm />
+    </Suspense>
   );
 }
