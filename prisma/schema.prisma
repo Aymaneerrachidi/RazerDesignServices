@@ -1,0 +1,419 @@
+// Razer Design Services — Production Database Schema
+// PostgreSQL via Prisma ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum Role {
+  SUPER_ADMIN
+  SUPERVISOR
+  ARTIST
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+}
+
+enum AssignmentStatus {
+  DRAFT
+  PENDING
+  IN_PROGRESS
+  SUBMITTED
+  REVISION
+  APPROVED
+  CANCELLED
+}
+
+enum AssignmentPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum SubmissionStatus {
+  PENDING
+  APPROVED
+  REVISION
+  REJECTED
+}
+
+enum NotificationType {
+  NEW_MESSAGE
+  NEW_ASSIGNMENT
+  SUBMISSION_UPLOADED
+  SUBMISSION_APPROVED
+  SUBMISSION_REVISION
+  SUBMISSION_REJECTED
+  DEADLINE_REMINDER
+  SYSTEM
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  CANCELLED
+}
+
+enum AuditAction {
+  USER_CREATED
+  USER_UPDATED
+  USER_DELETED
+  USER_ACTIVATED
+  USER_DEACTIVATED
+  USER_LOGIN
+  USER_LOGOUT
+  PASSWORD_CHANGED
+  ASSIGNMENT_CREATED
+  ASSIGNMENT_UPDATED
+  ASSIGNMENT_DELETED
+  SUBMISSION_CREATED
+  SUBMISSION_REVIEWED
+  MESSAGE_SENT
+  INVITE_SENT
+  INVITE_ACCEPTED
+  FILE_UPLOADED
+}
+
+// ─────────────────────────────────────────────
+// CORE MODELS
+// ─────────────────────────────────────────────
+
+model User {
+  id               String     @id @default(cuid())
+  fullName         String
+  email            String     @unique
+  passwordHash     String
+  role             Role       @default(ARTIST)
+  status           UserStatus @default(PENDING)
+  country          String?
+  timezone         String     @default("UTC")
+  avatarUrl        String?
+  bio              String?
+  specialty        String?    // For artists
+  isOnline         Boolean    @default(false)
+  lastSeenAt       DateTime?
+  emailVerified    Boolean    @default(false)
+  emailVerifiedAt  DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  // Relations
+  supervisorRelations    SupervisorArtist[] @relation("SupervisorRelation")
+  artistRelations        SupervisorArtist[] @relation("ArtistRelation")
+  assignmentsCreated     Assignment[]       @relation("AssignmentCreator")
+  assignmentsAssigned    Assignment[]       @relation("AssignedArtist")
+  submissions            Submission[]
+  messagesSent           Message[]          @relation("MessageSender")
+  conversationMemberships ConversationParticipant[]
+  notifications          Notification[]
+  auditLogs              AuditLog[]         @relation("AuditUser")
+  auditLogsPerformed     AuditLog[]         @relation("AuditPerformer")
+  passwordResets         PasswordReset[]
+  invitesSent            Invite[]           @relation("InviteSender")
+  invitesReceived        Invite[]           @relation("InviteRecipient")
+  submissionReviews      Submission[]       @relation("SubmissionReviewer")
+  sessions               Session[]
+
+  @@map("users")
+}
+
+model SupervisorArtist {
+  id           String   @id @default(cuid())
+  supervisorId String
+  artistId     String
+  country      String?
+  isActive     Boolean  @default(true)
+  assignedAt   DateTime @default(now())
+
+  supervisor User @relation("SupervisorRelation", fields: [supervisorId], references: [id], onDelete: Cascade)
+  artist     User @relation("ArtistRelation",     fields: [artistId],     references: [id], onDelete: Cascade)
+
+  @@unique([supervisorId, artistId])
+  @@map("supervisor_artist_relations")
+}
+
+model Region {
+  id          String       @id @default(cuid())
+  name        String
+  code        String       @unique // e.g. "US", "MY", "GB"
+  timezone    String       @default("UTC")
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  assignments Assignment[]
+
+  @@map("regions")
+}
+
+// ─────────────────────────────────────────────
+// SESSION / AUTH
+// ─────────────────────────────────────────────
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  ipAddress    String?
+  userAgent    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_resets")
+}
+
+model Invite {
+  id          String       @id @default(cuid())
+  email       String
+  role        Role         @default(ARTIST)
+  token       String       @unique
+  status      InviteStatus @default(PENDING)
+  senderId    String
+  recipientId String?      // Set when accepted
+  country     String?
+  supervisorId String?     // Pre-assign artist to supervisor
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime     @default(now())
+
+  sender    User  @relation("InviteSender",    fields: [senderId],    references: [id])
+  recipient User? @relation("InviteRecipient", fields: [recipientId], references: [id])
+
+  @@map("invites")
+}
+
+// ─────────────────────────────────────────────
+// CHAT
+// ─────────────────────────────────────────────
+
+model Conversation {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lastMessageAt DateTime?
+
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id             String   @id @default(cuid())
+  conversationId String
+  userId         String
+  joinedAt       DateTime @default(now())
+  lastReadAt     DateTime?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId],         references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  senderId       String
+  content        String?
+  messageType    String   @default("text") // text | image | file
+  createdAt      DateTime @default(now())
+  editedAt       DateTime?
+  deletedAt      DateTime?
+
+  conversation Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User                @relation("MessageSender", fields: [senderId], references: [id])
+  attachments  MessageAttachment[]
+  readReceipts MessageReadReceipt[]
+
+  @@map("messages")
+}
+
+model MessageAttachment {
+  id        String @id @default(cuid())
+  messageId String
+  fileName  String
+  fileUrl   String
+  fileSize  Int
+  mimeType  String
+  publicId  String? // Cloudinary public ID
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@map("message_attachments")
+}
+
+model MessageReadReceipt {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  readAt    DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@map("message_read_receipts")
+}
+
+// ─────────────────────────────────────────────
+// ASSIGNMENTS
+// ─────────────────────────────────────────────
+
+model Assignment {
+  id             String             @id @default(cuid())
+  title          String
+  description    String
+  referenceNotes String?
+  createdById    String
+  artistId       String
+  supervisorId   String?
+  regionId       String?
+  priority       AssignmentPriority @default(MEDIUM)
+  status         AssignmentStatus   @default(PENDING)
+  deadlineUtc    DateTime
+  tags           String[]           @default([])
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  createdBy   User        @relation("AssignmentCreator", fields: [createdById],   references: [id])
+  artist      User        @relation("AssignedArtist",    fields: [artistId],      references: [id])
+  region      Region?     @relation(fields: [regionId],  references: [id])
+  attachments AssignmentAttachment[]
+  submissions Submission[]
+
+  @@map("assignments")
+}
+
+model AssignmentAttachment {
+  id           String @id @default(cuid())
+  assignmentId String
+  fileName     String
+  fileUrl      String
+  fileSize     Int
+  mimeType     String
+  publicId     String?
+  uploadedAt   DateTime @default(now())
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@map("assignment_attachments")
+}
+
+// ─────────────────────────────────────────────
+// SUBMISSIONS
+// ─────────────────────────────────────────────
+
+model Submission {
+  id            String          @id @default(cuid())
+  assignmentId  String
+  artistId      String
+  versionNumber Int             @default(1)
+  note          String?
+  status        SubmissionStatus @default(PENDING)
+  feedback      String?
+  reviewedById  String?
+  submittedAt   DateTime        @default(now())
+  reviewedAt    DateTime?
+
+  assignment Assignment       @relation(fields: [assignmentId], references: [id])
+  artist     User             @relation(fields: [artistId],     references: [id])
+  reviewedBy User?            @relation("SubmissionReviewer", fields: [reviewedById], references: [id])
+  files      SubmissionFile[]
+  comments   SubmissionComment[]
+
+  @@map("submissions")
+}
+
+model SubmissionFile {
+  id           String @id @default(cuid())
+  submissionId String
+  fileName     String
+  fileUrl      String
+  fileSize     Int
+  mimeType     String
+  publicId     String?
+  uploadedAt   DateTime @default(now())
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@map("submission_files")
+}
+
+model SubmissionComment {
+  id           String   @id @default(cuid())
+  submissionId String
+  authorId     String
+  content      String
+  createdAt    DateTime @default(now())
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@map("submission_comments")
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  isRead    Boolean          @default(false)
+  link      String?
+  metadata  Json?
+  createdAt DateTime         @default(now())
+  readAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+// ─────────────────────────────────────────────
+// AUDIT LOG
+// ─────────────────────────────────────────────
+
+model AuditLog {
+  id          String      @id @default(cuid())
+  userId      String?     // Who was affected
+  performedBy String?     // Who did the action
+  action      AuditAction
+  resource    String?     // e.g. "assignment:assign-123"
+  metadata    Json?
+  ipAddress   String?
+  createdAt   DateTime    @default(now())
+
+  user      User? @relation("AuditUser",      fields: [userId],      references: [id])
+  performer User? @relation("AuditPerformer", fields: [performedBy], references: [id])
+
+  @@map("audit_logs")
+}
