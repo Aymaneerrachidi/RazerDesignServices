@@ -27,9 +27,9 @@ export function useSocket() {
       auth:       { userId: session.user.id, role: session.user.role },
       transports: ["websocket", "polling"],
       reconnection:         true,
-      reconnectionAttempts: 10,
-      reconnectionDelay:    2000,
-      timeout:              10000,
+      reconnectionAttempts: 3,   // Give up quickly on serverless (Vercel)
+      reconnectionDelay:    3000,
+      timeout:              8000,
     });
 
     socket.on("connect",    () => { setConnected(true);  });
