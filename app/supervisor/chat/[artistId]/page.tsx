@@ -47,7 +47,7 @@ export default function SupervisorChatConvo() {
         passwordHash: "",
         role:         "artist" as const,
         avatar:       otherUser.avatarUrl ?? "",
-        status:       (otherUser.isOnline ? "online" : "offline") as const,
+        status:       otherUser.isOnline ? ("online" as const) : ("offline" as const),
         createdAt:    "",
       }
     : null;

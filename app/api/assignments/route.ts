@@ -43,11 +43,13 @@ export async function GET(req: NextRequest) {
       const artistIds = await getAccessibleArtistIds(user);
       const assignments = await prisma.assignment.findMany({
         where: {
-          OR: [{ createdById: user.id }, { supervisorId: user.id }, { artistId: { in: artistIds } }],
-          status: (status as any) ?? undefined,
-          OR: search
-            ? [{ title: { contains: search, mode: "insensitive" } }]
-            : undefined,
+          AND: [
+            { OR: [{ createdById: user.id }, { supervisorId: user.id }, { artistId: { in: artistIds } }] },
+            { status: (status as any) ?? undefined },
+            search
+              ? { OR: [{ title: { contains: search, mode: "insensitive" } }] }
+              : {},
+          ],
         },
         include: {
           artist:     { select: { id: true, fullName: true, avatarUrl: true, specialty: true } },

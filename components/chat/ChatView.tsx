@@ -170,7 +170,7 @@ export function ChatView({
                 {/* Avatar — only on last message in group */}
                 <div className="flex-shrink-0 w-7">
                   {isLastInGroup ? (
-                    <Avatar name={sender.name ?? sender.fullName} avatar={(sender as any).avatar ?? (sender as any).avatarUrl} size="xs" />
+                    <Avatar name={sender.name ?? (sender as any).fullName} avatar={(sender as any).avatar ?? (sender as any).avatarUrl} size="xs" />
                   ) : null}
                 </div>
 

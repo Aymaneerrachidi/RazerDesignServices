@@ -46,7 +46,7 @@ export default function ArtistChatPage() {
         passwordHash: "",
         role:   "supervisor" as const,
         avatar: conv.otherUser.avatarUrl ?? "",
-        status: (conv.otherUser.isOnline ? "online" : "offline") as const,
+        status: conv.otherUser.isOnline ? ("online" as const) : ("offline" as const),
         createdAt: "",
       }
     : null;
