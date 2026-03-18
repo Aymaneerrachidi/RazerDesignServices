@@ -11,7 +11,6 @@ import {
   History,
   Settings,
   LogOut,
-  Layers,
   Bell,
   FileCheck,
   Shield,
@@ -82,9 +81,7 @@ function SidebarShell({
       >
         <div className="px-4 h-16 flex items-center border-b border-[var(--border)] flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-neon/10 border border-neon/25 flex items-center justify-center">
-              <Layers size={16} className="text-neon" />
-            </div>
+            <img src="/logo.svg" alt="RDS" className="w-8 h-8 object-contain" />
             <div>
               <p className="text-sm font-bold font-display tracking-wider text-text-primary leading-none">RDS</p>
               <p className="text-2xs text-text-muted font-body leading-none mt-0.5">Design Services</p>

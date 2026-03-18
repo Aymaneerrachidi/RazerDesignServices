@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Layers, ArrowRight, Lock, Mail } from "lucide-react";
+import { Eye, EyeOff, ArrowRight, Lock, Mail } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -52,9 +52,7 @@ export default function LoginPage() {
 
       <div className="relative z-10 w-full max-w-md" style={{ animation: "slideUp 0.5s cubic-bezier(0.16,1,0.3,1)" }}>
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-neon/10 border border-neon/25 flex items-center justify-center mb-4 shadow-neon-sm">
-            <Layers size={28} className="text-neon" />
-          </div>
+          <img src="/logo.svg" alt="RDS" className="w-16 h-16 object-contain mb-4" />
           <h1 className="text-3xl font-display font-bold text-text-primary tracking-wider text-glow">
             RAZER<span className="text-neon"> DESIGN</span>
           </h1>

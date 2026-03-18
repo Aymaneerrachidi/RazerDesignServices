@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: "RDS — Razer Design Services",
   description: "Premium creative operations platform for managing artists",
   icons: {
-    icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23060608'/><text y='24' font-size='20' fill='%2300E87A'>⬡</text></svg>",
+    icon: "/logo.svg",
   },
 };
 
