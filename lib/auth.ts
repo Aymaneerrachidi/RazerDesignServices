@@ -21,37 +21,42 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email.toLowerCase().trim() },
-        });
+        try {
+          const user = await prisma.user.findUnique({
+            where: { email: credentials.email.toLowerCase().trim() },
+          });
 
-        if (!user || user.status !== "ACTIVE") return null;
+          if (!user || user.status !== "ACTIVE") return null;
 
-        const valid = await compare(credentials.password, user.passwordHash);
-        if (!valid) return null;
+          const valid = await compare(credentials.password, user.passwordHash);
+          if (!valid) return null;
 
-        // Update online status + last seen
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { isOnline: true, lastSeenAt: new Date() },
-        });
+          // Update online status + last seen
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { isOnline: true, lastSeenAt: new Date() },
+          });
 
-        await auditLog({
-          userId: user.id,
-          performedBy: user.id,
-          action: "USER_LOGIN",
-          metadata: { email: user.email },
-        });
+          await auditLog({
+            userId: user.id,
+            performedBy: user.id,
+            action: "USER_LOGIN",
+            metadata: { email: user.email },
+          });
 
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.fullName,
-          role: user.role,
-          avatarUrl: user.avatarUrl,
-          timezone: user.timezone,
-          country: user.country,
-        };
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.fullName,
+            role: user.role,
+            avatarUrl: user.avatarUrl,
+            timezone: user.timezone,
+            country: user.country,
+          };
+        } catch (err) {
+          console.error("[AUTH] Credentials login failed:", err);
+          return null;
+        }
       },
     }),
   ],
