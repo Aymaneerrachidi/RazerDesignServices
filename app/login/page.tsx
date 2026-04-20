@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { getSession } from "next-auth/react";
 import { Eye, EyeOff, ArrowRight, Lock, Mail } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/Button";
@@ -17,11 +18,16 @@ export default function LoginPage() {
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState("");
 
+  const redirectForRole = (role?: string | null) => {
+    const normalizedRole = role?.toUpperCase();
+    if (normalizedRole === "SUPER_ADMIN") router.push("/admin/dashboard");
+    else if (normalizedRole === "SUPERVISOR") router.push("/supervisor/dashboard");
+    else router.push("/artist/dashboard");
+  };
+
   useEffect(() => {
     if (!isLoading && user) {
-      if (user.role === "super_admin")     router.push("/admin/dashboard");
-      else if (user.role === "supervisor") router.push("/supervisor/dashboard");
-      else                                 router.push("/artist/dashboard");
+      redirectForRole(user.role);
     }
   }, [user, isLoading, router]);
 
@@ -30,7 +36,14 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     const ok = await login(email, password);
-    if (!ok) setError("Invalid email or password.");
+    if (!ok) {
+      setError("Invalid email or password.");
+      setLoading(false);
+      return;
+    }
+
+    const session = await getSession();
+    redirectForRole(session?.user?.role);
     setLoading(false);
   };
 

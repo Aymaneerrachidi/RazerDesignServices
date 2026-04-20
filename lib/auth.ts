@@ -20,16 +20,31 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
+        const email = credentials.email.toLowerCase().trim();
 
         try {
           const user = await prisma.user.findUnique({
-            where: { email: credentials.email.toLowerCase().trim() },
+            where: { email },
           });
 
-          if (!user || user.status !== "ACTIVE") return null;
+          if (!user) {
+            console.warn("[AUTH] Credentials login rejected: user not found", { email });
+            return null;
+          }
+
+          if (user.status !== "ACTIVE") {
+            console.warn("[AUTH] Credentials login rejected: user inactive", {
+              email,
+              status: user.status,
+            });
+            return null;
+          }
 
           const valid = await compare(credentials.password, user.passwordHash);
-          if (!valid) return null;
+          if (!valid) {
+            console.warn("[AUTH] Credentials login rejected: invalid password", { email });
+            return null;
+          }
 
           // Update online status + last seen
           await prisma.user.update({
