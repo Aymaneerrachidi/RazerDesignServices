@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { getAuth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { canAccessConversation } from "@/lib/permissions";
-import { ok, forbidden, unauthorized, serverError } from "@/lib/api-response";
+import { created, error, ok, forbidden, unauthorized, serverError } from "@/lib/api-response";
 
 /** GET /api/conversations/[id]/messages */
 export async function GET(
@@ -56,6 +56,67 @@ export async function GET(
     return ok(messages);
   } catch (err) {
     console.error("[GET /api/conversations/[id]/messages]", err);
+    return serverError();
+  }
+}
+
+/** POST /api/conversations/[id]/messages */
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = await getAuth();
+  if (!session) return unauthorized();
+
+  const user    = { id: session.user.id, role: session.user.role };
+  const allowed = await canAccessConversation(user, params.id);
+  if (!allowed) return forbidden();
+
+  try {
+    const body = await req.json();
+    const content = typeof body.content === "string" ? body.content.trim() : "";
+    if (!content) return error("Message content is required");
+
+    const message = await prisma.message.create({
+      data: {
+        conversationId: params.id,
+        senderId:       session.user.id,
+        content,
+        messageType:    "text",
+      },
+      include: {
+        sender: { select: { id: true, fullName: true, avatarUrl: true, role: true } },
+        attachments:  true,
+        readReceipts: true,
+      },
+    });
+
+    await prisma.conversation.update({
+      where: { id: params.id },
+      data:  { lastMessageAt: new Date(), updatedAt: new Date() },
+    });
+
+    const participants = await prisma.conversationParticipant.findMany({
+      where: { conversationId: params.id, userId: { not: session.user.id } },
+      select: { userId: true },
+    });
+
+    if (participants.length > 0) {
+      await prisma.notification.createMany({
+        data: participants.map((p) => ({
+          userId:   p.userId,
+          type:     "NEW_MESSAGE",
+          title:    `New message from ${session.user.name ?? "User"}`,
+          body:     content.slice(0, 80),
+          link:     `/messages/${params.id}`,
+          metadata: { conversationId: params.id, senderId: session.user.id } as any,
+        })),
+      });
+    }
+
+    return created(message);
+  } catch (err) {
+    console.error("[POST /api/conversations/[id]/messages]", err);
     return serverError();
   }
 }

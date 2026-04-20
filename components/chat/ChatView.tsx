@@ -101,11 +101,11 @@ export function ChatView({
             "flex items-center gap-1.5 text-2xs font-mono px-3 py-1.5 rounded-full border transition-all duration-500",
             connected
               ? "bg-neon/5 border-neon/15 text-neon"
-              : "bg-red-500/5 border-red-500/15 text-red-400"
+              : "bg-white/3 border-[var(--border)] text-text-muted"
           )}
         >
           {connected ? <Wifi size={10} /> : <WifiOff size={10} />}
-          {connected ? "Live" : "Reconnecting…"}
+          {connected ? "Live" : "Syncing"}
         </div>
 
         <div className="flex items-center gap-1.5 text-2xs text-text-muted font-mono bg-white/3 border border-[var(--border)] px-3 py-1.5 rounded-full">
@@ -264,7 +264,7 @@ export function ChatView({
 
           <Button
             onClick={handleSend}
-            disabled={!input.trim() || !connected}
+            disabled={!input.trim()}
             size="sm"
             className="h-11 w-11 !px-0 flex-shrink-0"
             icon={<Send size={16} />}
@@ -279,7 +279,7 @@ export function ChatView({
             End-to-end private · Press Enter to send
           </p>
           {!connected && (
-            <span className="text-2xs text-red-400 font-mono ml-2">⚡ Reconnecting…</span>
+            <span className="text-2xs text-text-muted font-mono ml-2">Syncs every few seconds</span>
           )}
         </div>
       </div>

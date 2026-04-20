@@ -31,7 +31,7 @@ interface DBMessage {
 
 interface UseRealtimeChatReturn {
   messages: DBMessage[];
-  sendMessage: (content: string) => void;
+  sendMessage: (content: string) => Promise<void>;
   sendTyping: () => void;
   stopTyping: () => void;
   typingUsers: Record<string, string>;  // userId → userName
@@ -53,19 +53,39 @@ export function useRealtimeChat(conversationId: string): UseRealtimeChatReturn {
   const typingActive = useRef(false);
   const typingTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const fetchMessages = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!conversationId) return;
+    if (!silent) setIsLoading(true);
+
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}/messages`);
+      const data = await response.json();
+      if (data.success) {
+        setMessages(data.data);
+        setError(null);
+      } else {
+        setError(data.error);
+      }
+    } catch {
+      setError("Failed to load messages");
+    } finally {
+      if (!silent) setIsLoading(false);
+    }
+  }, [conversationId]);
+
   // ── Fetch history ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (!conversationId) return;
-    setIsLoading(true);
-    fetch(`/api/conversations/${conversationId}/messages`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success) setMessages(d.data);
-        else setError(d.error);
-      })
-      .catch(() => setError("Failed to load messages"))
-      .finally(() => setIsLoading(false));
-  }, [conversationId]);
+    fetchMessages();
+  }, [fetchMessages]);
+
+  // Vercel does not run the custom Socket.io server, so keep chat usable with polling.
+  useEffect(() => {
+    if (!conversationId || connected) return;
+    const interval = setInterval(() => {
+      fetchMessages({ silent: true });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [conversationId, connected, fetchMessages]);
 
   // ── Socket events ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -132,8 +152,8 @@ export function useRealtimeChat(conversationId: string): UseRealtimeChatReturn {
   }, [socket, conversationId, session?.user?.id]);
 
   // ── Send message ───────────────────────────────────────────────────────
-  const sendMessage = useCallback((content: string) => {
-    if (!content.trim() || !socket || !session?.user?.id) return;
+  const sendMessage = useCallback(async (content: string) => {
+    if (!content.trim() || !session?.user?.id) return;
 
     const tempId = `temp-${Date.now()}`;
     const optimistic: DBMessage = {
@@ -158,7 +178,27 @@ export function useRealtimeChat(conversationId: string): UseRealtimeChatReturn {
     setMessages((prev) => [...prev, optimistic]);
 
     // Stop typing
-    stopTyping();
+    typingActive.current = false;
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    if (socket && connected) socket.emit("typing:stop", { conversationId });
+
+    if (!socket || !connected) {
+      try {
+        const response = await fetch(`/api/conversations/${conversationId}/messages`, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ content: content.trim(), tempId }),
+        });
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error ?? "Failed to send");
+        setMessages((prev) => prev.map((m) => (m.id === tempId ? data.data : m)));
+        setError(null);
+      } catch {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        setError("Failed to send message");
+      }
+      return;
+    }
 
     socket.emit("message:send", { conversationId, content: content.trim(), tempId });
 
@@ -168,11 +208,11 @@ export function useRealtimeChat(conversationId: string): UseRealtimeChatReturn {
         setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...msg } : m)));
       }
     });
-  }, [socket, conversationId, session?.user?.id]);
+  }, [connected, socket, conversationId, session?.user?.id]);
 
   // ── Typing ────────────────────────────────────────────────────────────
   const sendTyping = useCallback(() => {
-    if (!socket || !conversationId) return;
+    if (!socket || !connected || !conversationId) return;
     if (!typingActive.current) {
       typingActive.current = true;
       socket.emit("typing:start", { conversationId });
@@ -182,14 +222,14 @@ export function useRealtimeChat(conversationId: string): UseRealtimeChatReturn {
       typingActive.current = false;
       socket.emit("typing:stop", { conversationId });
     }, 2500);
-  }, [socket, conversationId]);
+  }, [connected, socket, conversationId]);
 
   const stopTyping = useCallback(() => {
-    if (!socket) return;
+    if (!socket || !connected) return;
     typingActive.current = false;
     if (typingTimer.current) clearTimeout(typingTimer.current);
     socket.emit("typing:stop", { conversationId });
-  }, [socket, conversationId]);
+  }, [connected, socket, conversationId]);
 
   return { messages, sendMessage, sendTyping, stopTyping, typingUsers, connected, isLoading, error };
 }
