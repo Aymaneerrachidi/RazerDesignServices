@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { Upload, X, CheckCircle, ArrowRight } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/Button";
@@ -25,7 +26,9 @@ interface UploadedFile {
 
 const ALLOWED_TYPES = ["jpg", "jpeg", "png", "pdf", "psd", "ai", "zip"];
 
-export default function ArtistSubmitPage() {
+function ArtistSubmitForm() {
+  const searchParams = useSearchParams();
+  const preselectedAssignment = searchParams.get("assignmentId") ?? "";
   const [assignments,        setAssignments]        = useState<Assignment[]>([]);
   const [selectedAssignment, setSelectedAssignment] = useState("");
   const [files,              setFiles]              = useState<UploadedFile[]>([]);
@@ -41,13 +44,18 @@ export default function ArtistSubmitPage() {
       .then((r) => r.json())
       .then((d) => {
         const active = (d.data ?? []).filter((a: Assignment) =>
-          ["PENDING", "IN_PROGRESS", "REVISION"].includes(a.status.toUpperCase())
+          ["PENDING", "IN_PROGRESS", "REVISION"].includes(a.status.toUpperCase()) ||
+          a.id === preselectedAssignment
         );
         setAssignments(active);
-        if (active.length > 0) setSelectedAssignment(active[0].id);
+        if (preselectedAssignment && active.some((a: Assignment) => a.id === preselectedAssignment)) {
+          setSelectedAssignment(preselectedAssignment);
+        } else if (active.length > 0) {
+          setSelectedAssignment(active[0].id);
+        }
       })
       .catch(() => {});
-  }, []);
+  }, [preselectedAssignment]);
 
   const handleFiles = useCallback((newFiles: FileList | null) => {
     if (!newFiles) return;
@@ -319,5 +327,13 @@ export default function ArtistSubmitPage() {
         </form>
       )}
     </DashboardLayout>
+  );
+}
+
+export default function ArtistSubmitPage() {
+  return (
+    <Suspense>
+      <ArtistSubmitForm />
+    </Suspense>
   );
 }

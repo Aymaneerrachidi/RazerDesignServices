@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Calendar, Tag, X, CheckCircle } from "lucide-react";
+import { ArrowLeft, Calendar, Tag, X, CheckCircle, Image as ImageIcon } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea, Select } from "@/components/ui/Input";
@@ -18,6 +18,16 @@ interface Artist {
   specialty: string | null;
   isOnline: boolean;
 }
+
+interface ReferenceFile {
+  id: string;
+  file: File;
+  name: string;
+  size: number;
+  type: string;
+}
+
+const ALLOWED_REFERENCE_TYPES = ["jpg", "jpeg", "png", "webp", "pdf"];
 
 function CreateAssignmentForm() {
   const router       = useRouter();
@@ -33,7 +43,9 @@ function CreateAssignmentForm() {
   const [priority,      setPriority]      = useState("MEDIUM");
   const [tags,          setTags]          = useState<string[]>([]);
   const [tagInput,      setTagInput]      = useState("");
+  const [references,    setReferences]    = useState<ReferenceFile[]>([]);
   const [loading,       setLoading]       = useState(false);
+  const [uploadProgress,setUploadProgress]= useState("");
   const [success,       setSuccess]       = useState(false);
   const [error,         setError]         = useState("");
 
@@ -50,6 +62,31 @@ function CreateAssignmentForm() {
     setTagInput("");
   };
 
+  const handleReferenceFiles = (fileList: FileList | null) => {
+    if (!fileList) return;
+    setError("");
+    const next: ReferenceFile[] = [];
+    Array.from(fileList).forEach((file) => {
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+      if (!ALLOWED_REFERENCE_TYPES.includes(ext)) {
+        setError(`Reference type .${ext} is not allowed.`);
+        return;
+      }
+      if (file.size > 25 * 1024 * 1024) {
+        setError("Reference files must be under 25MB.");
+        return;
+      }
+      next.push({
+        id: `${Date.now()}-${Math.random()}`,
+        file,
+        name: file.name,
+        size: file.size,
+        type: ext,
+      });
+    });
+    setReferences((prev) => [...prev, ...next]);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -60,6 +97,35 @@ function CreateAssignmentForm() {
 
     setLoading(true);
     try {
+      const uploadedReferences: Array<{
+        fileName: string; fileUrl: string; fileSize: number; mimeType: string; publicId: string;
+      }> = [];
+
+      for (let i = 0; i < references.length; i++) {
+        const reference = references[i];
+        setUploadProgress(`Uploading reference ${i + 1}/${references.length}: ${reference.name}`);
+
+        const formData = new FormData();
+        formData.append("file", reference.file);
+        formData.append("folder", "rds/assignment-references");
+
+        const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) {
+          setError(uploadData.error ?? `Failed to upload ${reference.name}`);
+          return;
+        }
+
+        uploadedReferences.push({
+          fileName: uploadData.data.fileName,
+          fileUrl:  uploadData.data.url,
+          fileSize: uploadData.data.fileSize,
+          mimeType: uploadData.data.mimeType,
+          publicId: uploadData.data.publicId,
+        });
+      }
+
+      setUploadProgress("Creating assignment...");
       const res = await fetch("/api/assignments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -71,6 +137,7 @@ function CreateAssignmentForm() {
           deadlineUtc: new Date(dueDate).toISOString(),
           priority,
           tags,
+          attachments: uploadedReferences,
         }),
       });
       const data = await res.json();
@@ -84,6 +151,7 @@ function CreateAssignmentForm() {
       setError("Network error. Please try again.");
     } finally {
       setLoading(false);
+      setUploadProgress("");
     }
   };
 
@@ -139,6 +207,50 @@ function CreateAssignmentForm() {
                   onChange={(e) => setReferenceNotes(e.target.value)}
                   rows={3}
                 />
+
+                <div className="space-y-3">
+                  <label className="block text-xs font-semibold text-text-secondary font-display tracking-widest uppercase">
+                    Reference Images
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById("reference-input")?.click()}
+                    className="w-full rounded-xl border border-dashed border-[var(--border)] bg-white/2 px-4 py-6 text-center hover:border-neon/25 transition-colors"
+                  >
+                    <input
+                      id="reference-input"
+                      type="file"
+                      multiple
+                      accept=".jpg,.jpeg,.png,.webp,.pdf"
+                      className="hidden"
+                      onChange={(e) => handleReferenceFiles(e.target.files)}
+                    />
+                    <ImageIcon size={22} className="text-text-muted mx-auto mb-2" />
+                    <p className="text-sm text-text-primary font-display font-semibold">Add reference files</p>
+                    <p className="text-xs text-text-muted font-body mt-1">JPG, PNG, WEBP, or PDF. Max 25MB each.</p>
+                  </button>
+
+                  {references.length > 0 && (
+                    <div className="space-y-2">
+                      {references.map((file) => (
+                        <div key={file.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/3 border border-[var(--border)]">
+                          <ImageIcon size={16} className="text-neon flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-text-primary font-body truncate">{file.name}</p>
+                            <p className="text-2xs text-text-muted font-mono">{file.type.toUpperCase()}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setReferences((prev) => prev.filter((ref) => ref.id !== file.id))}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-text-muted hover:text-red-400 hover:bg-red-400/10 transition-all"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 {/* Tags */}
                 <div className="space-y-2">
@@ -227,6 +339,12 @@ function CreateAssignmentForm() {
 
               {error && (
                 <div className="px-4 py-3 rounded-lg bg-red-500/8 border border-red-500/20 text-red-400 text-sm font-body">{error}</div>
+              )}
+
+              {loading && uploadProgress && (
+                <div className="px-4 py-3 rounded-lg bg-neon/5 border border-neon/20 text-neon text-xs font-mono text-center">
+                  {uploadProgress}
+                </div>
               )}
 
               <Button type="submit" size="lg" loading={loading} className="w-full"

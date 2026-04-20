@@ -27,6 +27,9 @@ export async function POST(
     if (!["APPROVED", "REVISION", "REJECTED"].includes(status)) {
       return error("status must be APPROVED, REVISION, or REJECTED");
     }
+    if ((status === "REVISION" || status === "REJECTED") && !feedback?.trim()) {
+      return error("Feedback is required when requesting a revision or rejecting a submission");
+    }
 
     const submission = await prisma.submission.findUnique({
       where:   { id: params.id },
@@ -38,7 +41,7 @@ export async function POST(
       where: { id: params.id },
       data: {
         status,
-        feedback,
+        feedback: feedback?.trim() || undefined,
         reviewedById: user.id,
         reviewedAt:   new Date(),
       },

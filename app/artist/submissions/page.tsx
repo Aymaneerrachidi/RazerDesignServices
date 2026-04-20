@@ -26,7 +26,7 @@ interface ApiSubmission {
   submittedAt: string;
   reviewedAt: string | null;
   files: SubmissionFile[];
-  assignment: { id: string; title: string } | null;
+  assignment: { id: string; title: string; status?: string } | null;
 }
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
@@ -139,6 +139,22 @@ export default function ArtistSubmissionsPage() {
                     {sub.reviewedAt && (
                       <p className="text-2xs text-text-muted font-mono mt-2">Reviewed {formatDateTime(sub.reviewedAt)}</p>
                     )}
+                  </div>
+                )}
+
+                {(sub.status === "REVISION" || sub.status === "REJECTED") && sub.assignment && (
+                  <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-white/3 border border-[var(--border)] px-4 py-3">
+                    <div className="flex-1 min-w-[180px]">
+                      <p className="text-xs font-display font-bold text-text-primary">
+                        {sub.status === "REVISION" ? "Revision requested" : "Submission declined"}
+                      </p>
+                      <p className="text-xs text-text-muted font-body mt-0.5">
+                        Review the feedback, upload the fixed art, and send a new version.
+                      </p>
+                    </div>
+                    <Link href={`/artist/submit?assignmentId=${sub.assignment.id}`}>
+                      <Button size="sm" icon={<Upload size={13} />}>Resubmit Fixed Art</Button>
+                    </Link>
                   </div>
                 )}
               </div>

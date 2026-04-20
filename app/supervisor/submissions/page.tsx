@@ -45,6 +45,7 @@ export default function SubmissionsPage() {
   const [filter,      setFilter]      = useState("");
   const [selected,    setSelected]    = useState<ApiSubmission | null>(null);
   const [feedback,    setFeedback]    = useState("");
+  const [reviewError, setReviewError] = useState("");
   const [submitting,  setSubmitting]  = useState(false);
   const [loading,     setLoading]     = useState(true);
 
@@ -61,6 +62,11 @@ export default function SubmissionsPage() {
   useEffect(() => { fetchSubs(); }, [filter]);
 
   const handleAction = async (subId: string, action: "APPROVED" | "REVISION" | "REJECTED") => {
+    setReviewError("");
+    if ((action === "REVISION" || action === "REJECTED") && !feedback.trim()) {
+      setReviewError("Please add feedback so the artist knows what to fix.");
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await fetch(`/api/submissions/${subId}/review`, {
@@ -68,15 +74,18 @@ export default function SubmissionsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: action, feedback: feedback || undefined }),
       });
+      const data = await res.json().catch(() => null);
       if (res.ok) {
         setSubmissions((prev) =>
-          prev.map((s) => s.id === subId ? { ...s, status: action, feedback } : s)
+          prev.map((s) => s.id === subId ? { ...s, status: action, feedback: feedback.trim() } : s)
         );
         setSelected(null);
         setFeedback("");
+      } else {
+        setReviewError(data?.error ?? "Failed to review submission.");
       }
     } catch {
-      // fail silently
+      setReviewError("Network error. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -187,7 +196,7 @@ export default function SubmissionsPage() {
 
                 {sub.status === "PENDING" && (
                   <div className="flex flex-wrap gap-2 pt-2 border-t border-[var(--border)]">
-                    <Button size="sm" onClick={() => { setSelected(sub); setFeedback(""); }}
+                    <Button size="sm" onClick={() => { setSelected(sub); setFeedback(""); setReviewError(""); }}
                       icon={<Eye size={13} />} variant="neon-outline">
                       Review & Decide
                     </Button>
@@ -204,7 +213,7 @@ export default function SubmissionsPage() {
       )}
 
       {/* Review Modal */}
-      <Modal isOpen={!!selected} onClose={() => { setSelected(null); setFeedback(""); }} title="Review Submission" size="lg">
+      <Modal isOpen={!!selected} onClose={() => { setSelected(null); setFeedback(""); setReviewError(""); }} title="Review Submission" size="lg">
         {selected && (
           <div className="space-y-5">
             <div className="flex items-center gap-3">
@@ -242,12 +251,18 @@ export default function SubmissionsPage() {
             </div>
 
             <Textarea
-              label="Feedback (Optional)"
-              placeholder="Provide detailed feedback for the artist..."
+              label="Feedback"
+              placeholder="Tell the artist what worked, what needs revision, or why the submission is declined..."
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
               rows={4}
             />
+
+            {reviewError && (
+              <div className="px-4 py-3 rounded-lg bg-red-500/8 border border-red-500/20 text-red-400 text-sm font-body">
+                {reviewError}
+              </div>
+            )}
 
             <div className="grid grid-cols-3 gap-3">
               <Button onClick={() => handleAction(selected.id, "APPROVED")} loading={submitting}

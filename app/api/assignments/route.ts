@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { title, description, artistId, deadlineUtc, priority, referenceNotes, tags, regionId } = body;
+    const { title, description, artistId, deadlineUtc, priority, referenceNotes, tags, regionId, attachments } = body;
 
     if (!title || !description || !artistId || !deadlineUtc) {
       return error("title, description, artistId, and deadlineUtc are required");
@@ -117,10 +117,22 @@ export async function POST(req: NextRequest) {
         priority:     priority ?? "MEDIUM",
         deadlineUtc:  new Date(deadlineUtc),
         status:       "PENDING",
+        attachments: attachments?.length
+          ? {
+              create: attachments.map((f: any) => ({
+                fileName: f.fileName,
+                fileUrl:  f.fileUrl,
+                fileSize: f.fileSize,
+                mimeType: f.mimeType,
+                publicId: f.publicId,
+              })),
+            }
+          : undefined,
       },
       include: {
         artist:    { select: { id: true, fullName: true, avatarUrl: true } },
         createdBy: { select: { id: true, fullName: true } },
+        attachments: true,
       },
     });
 

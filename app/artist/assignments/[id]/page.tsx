@@ -93,7 +93,7 @@ export default function ArtistAssignmentDetail() {
             <Button variant="ghost" size="sm" icon={<ArrowLeft size={14} />}>Back</Button>
           </Link>
           {isActive && (
-            <Link href="/artist/submit">
+            <Link href={`/artist/submit?assignmentId=${assignment.id}`}>
               <Button size="sm" icon={<Upload size={14} />}>Submit Work</Button>
             </Link>
           )}
@@ -193,7 +193,7 @@ export default function ArtistAssignmentDetail() {
               My Submissions ({assignment.submissions.length})
             </h3>
             {isActive && (
-              <Link href="/artist/submit">
+              <Link href={`/artist/submit?assignmentId=${assignment.id}`}>
                 <Button size="sm" icon={<Upload size={13} />}>
                   {assignment.submissions.length > 0 ? "Resubmit" : "Submit Work"}
                 </Button>
@@ -241,9 +241,19 @@ export default function ArtistAssignmentDetail() {
                   )}
 
                   {sub.feedback && (
-                    <div className="p-3 rounded-lg bg-neon/4 border border-neon/12">
-                      <p className="text-2xs text-neon font-display tracking-widest uppercase font-bold mb-1">
-                        Supervisor Feedback
+                    <div className={cn(
+                      "p-3 rounded-lg border",
+                      sub.status === "REVISION"
+                        ? "bg-amber-500/5 border-amber-500/20"
+                        : sub.status === "REJECTED"
+                        ? "bg-red-500/5 border-red-500/20"
+                        : "bg-neon/4 border-neon/12"
+                    )}>
+                      <p className={cn(
+                        "text-2xs font-display tracking-widest uppercase font-bold mb-1",
+                        sub.status === "REVISION" ? "text-amber-400" : sub.status === "REJECTED" ? "text-red-400" : "text-neon"
+                      )}>
+                        {sub.status === "REVISION" ? "Revision Notes" : sub.status === "REJECTED" ? "Decline Reason" : "Supervisor Feedback"}
                       </p>
                       <p className="text-xs text-text-secondary font-body">{sub.feedback}</p>
                       {sub.reviewedAt && (
@@ -252,6 +262,14 @@ export default function ArtistAssignmentDetail() {
                         </p>
                       )}
                     </div>
+                  )}
+
+                  {(sub.status === "REVISION" || sub.status === "REJECTED") && (
+                    <Link href={`/artist/submit?assignmentId=${assignment.id}`}>
+                      <Button size="sm" icon={<Upload size={13} />} className="mt-3">
+                        Resubmit Fixed Art
+                      </Button>
+                    </Link>
                   )}
                 </div>
               ))}
@@ -266,7 +284,7 @@ export default function ArtistAssignmentDetail() {
             <p className="text-sm text-text-muted font-body mb-4">
               Upload your completed files and add notes for the supervisor.
             </p>
-            <Link href="/artist/submit">
+            <Link href={`/artist/submit?assignmentId=${assignment.id}`}>
               <Button icon={<Upload size={16} />} size="lg">Submit Artwork</Button>
             </Link>
           </div>
