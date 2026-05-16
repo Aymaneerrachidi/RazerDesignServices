@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import { useSession } from "next-auth/react";
 
 let globalSocket: Socket | null = null;
+let connectionAttempted = false;
 
 export function useSocket() {
   const { data: session } = useSession();
@@ -21,26 +22,27 @@ export function useSocket() {
       return;
     }
 
+    // Don't create another socket if we already tried and failed
+    if (connectionAttempted && globalSocket && !globalSocket.connected) {
+      return;
+    }
+
+    connectionAttempted = true;
     const origin = typeof window !== "undefined" ? window.location.origin : "";
 
     const socket = io(origin, {
-      auth:       { userId: session.user.id, role: session.user.role },
-      transports: ["websocket", "polling"],
-      reconnection:         true,
-      reconnectionAttempts: 3,   // Give up quickly on serverless (Vercel)
-      reconnectionDelay:    3000,
-      timeout:              8000,
+      auth:                 { userId: session.user.id, role: session.user.role },
+      transports:           ["websocket", "polling"],
+      reconnection:         false, // No auto-reconnect — server.ts doesn't run on Vercel
+      timeout:              5000,
     });
 
-    socket.on("connect",    () => { setConnected(true);  });
-    socket.on("disconnect", () => { setConnected(false); });
+    socket.on("connect",       () => { setConnected(true);  });
+    socket.on("disconnect",    () => { setConnected(false); });
+    socket.on("connect_error", () => { socket.close();      }); // Stop retrying immediately
 
-    globalSocket       = socket;
-    socketRef.current  = socket;
-
-    return () => {
-      // Don't disconnect on component unmount — keep connection alive
-    };
+    globalSocket      = socket;
+    socketRef.current = socket;
   }, [session?.user?.id]);
 
   return { socket: socketRef.current, connected };
