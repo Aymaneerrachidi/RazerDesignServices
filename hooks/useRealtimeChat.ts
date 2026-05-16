@@ -58,7 +58,9 @@ export function useRealtimeChat(conversationId: string): UseRealtimeChatReturn {
     if (!silent) setIsLoading(true);
 
     try {
-      const response = await fetch(`/api/conversations/${conversationId}/messages`);
+      const response = await fetch(`/api/conversations/${conversationId}/messages`, {
+        cache: "no-store",
+      });
       const data = await response.json();
       if (data.success) {
         setMessages(data.data);
@@ -78,14 +80,14 @@ export function useRealtimeChat(conversationId: string): UseRealtimeChatReturn {
     fetchMessages();
   }, [fetchMessages]);
 
-  // Poll as a safety net — faster when socket is offline, slower when connected.
+  // Poll every 5s as a reliable fallback regardless of socket state.
   useEffect(() => {
     if (!conversationId) return;
     const interval = setInterval(() => {
       fetchMessages({ silent: true });
-    }, connected ? 10000 : 5000);
+    }, 5000);
     return () => clearInterval(interval);
-  }, [conversationId, connected, fetchMessages]);
+  }, [conversationId, fetchMessages]);
 
   // ── Socket events ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -186,26 +188,25 @@ export function useRealtimeChat(conversationId: string): UseRealtimeChatReturn {
     if (typingTimer.current) clearTimeout(typingTimer.current);
     if (socket && connected) socket.emit("typing:stop", { conversationId });
 
-    if (!socket || !connected) {
-      try {
-        const response = await fetch(`/api/conversations/${conversationId}/messages`, {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ content: content.trim(), tempId }),
-        });
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error ?? "Failed to send");
-        setMessages((prev) => prev.map((m) => (m.id === tempId ? data.data : m)));
-        setError(null);
-      } catch {
-        setMessages((prev) => prev.filter((m) => m.id !== tempId));
-        setError("Failed to send message");
+    // Always persist via HTTP — socket server doesn't run on Vercel serverless
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}/messages`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ content: content.trim(), tempId }),
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error ?? "Failed to send");
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? data.data : m)));
+      setError(null);
+      // Best-effort socket notification so the other client's listener fires immediately
+      if (socket && connected) {
+        socket.emit("message:send", { conversationId, content: content.trim(), tempId, messageId: data.data.id });
       }
-      return;
+    } catch {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setError("Failed to send message");
     }
-
-    socket.emit("message:send", { conversationId, content: content.trim(), tempId });
-    // Temp message replacement is handled by the persistent onNewMessage listener in the socket effect
   }, [connected, socket, conversationId, session?.user?.id]);
 
   // ── Typing ────────────────────────────────────────────────────────────

@@ -4,6 +4,8 @@ import prisma from "@/lib/prisma";
 import { canAccessConversation } from "@/lib/permissions";
 import { created, error, ok, forbidden, unauthorized, serverError } from "@/lib/api-response";
 
+export const dynamic = "force-dynamic";
+
 /** GET /api/conversations/[id]/messages */
 export async function GET(
   req: NextRequest,
