@@ -29,10 +29,15 @@ export function Header({ title, subtitle, onMenuClick, actions }: HeaderProps) {
   const [notifs, setNotifs]         = useState<Notif[]>([]);
 
   useEffect(() => {
-    fetch("/api/notifications")
-      .then((r) => r.json())
-      .then((d) => setNotifs(d.data ?? []))
-      .catch(() => {});
+    const fetchNotifs = () => {
+      fetch("/api/notifications")
+        .then((r) => r.json())
+        .then((d) => setNotifs(d.data ?? []))
+        .catch(() => {});
+    };
+    fetchNotifs();
+    const interval = setInterval(fetchNotifs, 30_000);
+    return () => clearInterval(interval);
   }, []);
 
   const markRead = async (id: string) => {

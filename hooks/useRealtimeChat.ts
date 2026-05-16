@@ -78,12 +78,12 @@ export function useRealtimeChat(conversationId: string): UseRealtimeChatReturn {
     fetchMessages();
   }, [fetchMessages]);
 
-  // Vercel does not run the custom Socket.io server, so keep chat usable with polling.
+  // Poll as a safety net — faster when socket is offline, slower when connected.
   useEffect(() => {
-    if (!conversationId || connected) return;
+    if (!conversationId) return;
     const interval = setInterval(() => {
       fetchMessages({ silent: true });
-    }, 5000);
+    }, connected ? 10000 : 5000);
     return () => clearInterval(interval);
   }, [conversationId, connected, fetchMessages]);
 
@@ -98,6 +98,10 @@ export function useRealtimeChat(conversationId: string): UseRealtimeChatReturn {
 
     const onNewMessage = (msg: DBMessage & { tempId?: string }) => {
       setMessages((prev) => {
+        // Replace optimistic temp message when server echoes back with real ID + tempId
+        if (msg.tempId && prev.some((m) => m.id === msg.tempId)) {
+          return prev.map((m) => (m.id === msg.tempId ? { ...msg } : m));
+        }
         if (prev.some((m) => m.id === msg.id)) return prev;
         return [...prev, msg];
       });
@@ -201,13 +205,7 @@ export function useRealtimeChat(conversationId: string): UseRealtimeChatReturn {
     }
 
     socket.emit("message:send", { conversationId, content: content.trim(), tempId });
-
-    // Replace temp message when real one arrives via message:new
-    socket.once("message:new", (msg: DBMessage & { tempId?: string }) => {
-      if (msg.tempId === tempId) {
-        setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...msg } : m)));
-      }
-    });
+    // Temp message replacement is handled by the persistent onNewMessage listener in the socket effect
   }, [connected, socket, conversationId, session?.user?.id]);
 
   // ── Typing ────────────────────────────────────────────────────────────
