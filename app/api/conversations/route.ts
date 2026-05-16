@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { getAuth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
 import { isSuperAdmin, isSupervisor, artistCanContactSupervisor, supervisorCanAccessArtist } from "@/lib/permissions";
 import { ok, created, forbidden, unauthorized, error, serverError } from "@/lib/api-response";
 

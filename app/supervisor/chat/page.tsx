@@ -37,7 +37,7 @@ export default function SupervisorChatPage() {
   const [starting,  setStarting]  = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/conversations")
+    fetch("/api/conversations", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => setConvos(d.data ?? []))
       .catch(() => {})

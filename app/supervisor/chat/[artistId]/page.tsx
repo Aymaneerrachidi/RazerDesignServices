@@ -26,7 +26,7 @@ export default function SupervisorChatConvo() {
   const [loading,   setLoading]   = useState(true);
 
   useEffect(() => {
-    fetch("/api/conversations")
+    fetch("/api/conversations", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
         const convs = d.data ?? [];

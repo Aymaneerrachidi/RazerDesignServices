@@ -22,7 +22,7 @@ export default function ArtistChatPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/conversations")
+    fetch("/api/conversations", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
         const convos: Conversation[] = d.data ?? [];
