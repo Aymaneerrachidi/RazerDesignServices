@@ -37,7 +37,8 @@ interface UseRealtimeChatReturn {
   typingUsers: Record<string, string>;  // userId → userName
   connected: boolean;
   isLoading: boolean;
-  error: string | null;
+  error: string | null;      // fetch/load errors
+  sendError: string | null;  // send-specific errors
 }
 
 export function useRealtimeChat(conversationId: string): UseRealtimeChatReturn {
@@ -48,6 +49,7 @@ export function useRealtimeChat(conversationId: string): UseRealtimeChatReturn {
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
   const [isLoading,   setIsLoading]   = useState(true);
   const [error,       setError]       = useState<string | null>(null);
+  const [sendError,   setSendError]   = useState<string | null>(null);
 
   const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const typingActive = useRef(false);
@@ -217,7 +219,7 @@ export function useRealtimeChat(conversationId: string): UseRealtimeChatReturn {
       }
     } catch (err) {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      setError(err instanceof Error ? err.message : "Failed to send message");
+      setSendError(err instanceof Error ? err.message : "Failed to send message");
     }
   }, [connected, socket, conversationId, session?.user?.id]);
 
@@ -242,5 +244,5 @@ export function useRealtimeChat(conversationId: string): UseRealtimeChatReturn {
     socket.emit("typing:stop", { conversationId });
   }, [connected, socket, conversationId]);
 
-  return { messages, sendMessage, sendTyping, stopTyping, typingUsers, connected, isLoading, error };
+  return { messages, sendMessage, sendTyping, stopTyping, typingUsers, connected, isLoading, error, sendError };
 }
