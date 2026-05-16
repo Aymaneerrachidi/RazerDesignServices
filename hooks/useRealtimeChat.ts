@@ -67,7 +67,15 @@ export function useRealtimeChat(conversationId: string): UseRealtimeChatReturn {
       }
       const data = await response.json();
       if (data.success) {
-        setMessages(data.data);
+        setMessages((prev) => {
+          // Keep any optimistic (temp-*) messages that haven't been confirmed yet
+          // so a background poll can't erase a message that's mid-POST
+          const pending = prev.filter((m) => m.id.startsWith("temp-"));
+          if (pending.length === 0) return data.data;
+          const serverIds = new Set((data.data as { id: string }[]).map((m) => m.id));
+          const stillPending = pending.filter((t) => !serverIds.has(t.id));
+          return [...data.data, ...stillPending];
+        });
         setError(null);
       } else {
         setError(data.error ?? "Failed to load messages");
@@ -207,9 +215,9 @@ export function useRealtimeChat(conversationId: string): UseRealtimeChatReturn {
       if (socket && connected) {
         socket.emit("message:send", { conversationId, content: content.trim(), tempId, messageId: data.data.id });
       }
-    } catch {
+    } catch (err) {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      setError("Failed to send message");
+      setError(err instanceof Error ? err.message : "Failed to send message");
     }
   }, [connected, socket, conversationId, session?.user?.id]);
 
