@@ -60,7 +60,17 @@ export async function GET(_req: NextRequest) {
       })
     );
 
-    return ok(withUnread);
+    // Keep only the most-recent conversation per other user (duplicates can
+    // form from concurrent "New Message" clicks — dedup so both sides agree)
+    const seenUsers = new Set<string>();
+    const deduped = withUnread.filter((conv) => {
+      const otherId = conv.otherUser?.id;
+      if (!otherId || seenUsers.has(otherId)) return false;
+      seenUsers.add(otherId);
+      return true;
+    });
+
+    return ok(deduped);
   } catch (err) {
     console.error("[GET /api/conversations]", err);
     return serverError();

@@ -60,9 +60,10 @@ export function useRealtimeChat(conversationId: string): UseRealtimeChatReturn {
     if (!silent) setIsLoading(true);
 
     try {
-      const response = await fetch(`/api/conversations/${conversationId}/messages`, {
-        cache: "no-store",
-      });
+      const response = await fetch(
+        `/api/conversations/${conversationId}/messages?t=${Date.now()}`,
+        { cache: "no-store" }
+      );
       if (!response.ok) {
         setError(`HTTP ${response.status}: Failed to load messages`);
         return;
