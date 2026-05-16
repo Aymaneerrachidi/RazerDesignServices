@@ -61,15 +61,19 @@ export function useRealtimeChat(conversationId: string): UseRealtimeChatReturn {
       const response = await fetch(`/api/conversations/${conversationId}/messages`, {
         cache: "no-store",
       });
+      if (!response.ok) {
+        setError(`HTTP ${response.status}: Failed to load messages`);
+        return;
+      }
       const data = await response.json();
       if (data.success) {
         setMessages(data.data);
         setError(null);
       } else {
-        setError(data.error);
+        setError(data.error ?? "Failed to load messages");
       }
     } catch {
-      setError("Failed to load messages");
+      setError("Network error — could not load messages");
     } finally {
       if (!silent) setIsLoading(false);
     }

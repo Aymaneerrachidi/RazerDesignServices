@@ -31,7 +31,7 @@ export function ChatView({
   otherUser,
   privateLabel = "Private Channel",
 }: ChatViewProps) {
-  const { messages, sendMessage, sendTyping, stopTyping, typingUsers, connected, isLoading } =
+  const { messages, sendMessage, sendTyping, stopTyping, typingUsers, connected, isLoading, error } =
     useRealtimeChat(conversationId);
   const typingUser = Object.values(typingUsers)[0] ?? null;
 
@@ -122,7 +122,16 @@ export function ChatView({
           </div>
         )}
 
-        {!isLoading && messages.length === 0 && (
+        {!isLoading && error && (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <p className="text-sm text-red-400 font-body">{error}</p>
+              <p className="text-xs text-text-muted font-mono mt-1">conv: {conversationId}</p>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && !error && messages.length === 0 && (
           <div className="text-center py-12">
             <div className="w-14 h-14 rounded-2xl bg-white/3 border border-[var(--border)] flex items-center justify-center mx-auto mb-3">
               <Lock size={22} className="text-text-muted" />
@@ -132,7 +141,7 @@ export function ChatView({
           </div>
         )}
 
-        {!isLoading && messages.map((msg, i) => {
+        {!isLoading && !error && messages.map((msg, i) => {
           const isSelf = msg.senderId === currentUser.id;
           const msgTime = msg.createdAt;
           const sender = isSelf ? currentUser : otherUser;
