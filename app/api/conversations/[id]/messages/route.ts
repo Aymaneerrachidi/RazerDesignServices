@@ -22,6 +22,8 @@ export async function GET(
     const cursor = req.nextUrl.searchParams.get("cursor");
     const limit  = parseInt(req.nextUrl.searchParams.get("limit") ?? "50", 10);
 
+    // Fetch newest `limit` messages (desc), then reverse for chronological display.
+    // This ensures new messages are never cut off by the take limit.
     const messages = await prisma.message.findMany({
       where: {
         conversationId: params.id,
@@ -37,9 +39,11 @@ export async function GET(
         attachments:  true,
         readReceipts: true,
       },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: "desc" },
       take:    limit,
     });
+
+    messages.reverse();
 
     // Mark all as read
     const unread = messages.filter(
