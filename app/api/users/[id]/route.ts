@@ -98,7 +98,7 @@ export async function PATCH(
   }
 }
 
-/** DELETE /api/users/[id] — Super admin only */
+/** DELETE /api/users/[id] — Super admin or supervising supervisor */
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: { id: string } }
@@ -106,8 +106,20 @@ export async function DELETE(
   const session = await getAuth();
   if (!session) return unauthorized();
 
-  if (!isSuperAdmin({ id: session.user.id, role: session.user.role })) {
-    return forbidden();
+  const actor = { id: session.user.id, role: session.user.role };
+
+  // Super admins can deactivate anyone
+  if (!isSuperAdmin(actor)) {
+    // Supervisors can only deactivate artists they directly manage
+    const canManage = await canManageUser(actor, params.id);
+    if (!canManage) return forbidden();
+
+    // Confirm target is an ARTIST (supervisors cannot deactivate other roles)
+    const target = await prisma.user.findUnique({
+      where:  { id: params.id },
+      select: { role: true },
+    });
+    if (!target || target.role !== "ARTIST") return forbidden();
   }
 
   try {

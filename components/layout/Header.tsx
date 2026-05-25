@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Bell, Menu } from "lucide-react";
+import { Bell, Menu, CheckCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { Avatar } from "@/components/ui/Avatar";
 import { formatRelativeTime } from "@/lib/utils";
@@ -45,6 +45,11 @@ export function Header({ title, subtitle, onMenuClick, actions }: HeaderProps) {
     setNotifs((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
   };
 
+  const markAllRead = async () => {
+    await fetch("/api/notifications", { method: "PATCH" }).catch(() => {});
+    setNotifs((prev) => prev.map((n) => ({ ...n, isRead: true })));
+  };
+
   const unread = notifs.filter((n) => !n.isRead).length;
 
   const typeIcon: Record<string, string> = {
@@ -84,8 +89,19 @@ export function Header({ title, subtitle, onMenuClick, actions }: HeaderProps) {
               <div className="absolute right-0 top-full mt-2 w-80 glass rounded-xl border border-[var(--border)] shadow-card z-50 overflow-hidden"
                 style={{ animation: "slideUp 0.2s ease-out" }}>
                 <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
-                  <p className="text-sm font-bold font-display text-text-primary">Notifications</p>
-                  {unread > 0 && <span className="badge-count">{unread}</span>}
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-bold font-display text-text-primary">Notifications</p>
+                    {unread > 0 && <span className="badge-count">{unread}</span>}
+                  </div>
+                  {unread > 0 && (
+                    <button
+                      onClick={markAllRead}
+                      className="flex items-center gap-1 text-2xs text-text-muted hover:text-neon font-mono transition-colors"
+                    >
+                      <CheckCheck size={12} />
+                      Mark all read
+                    </button>
+                  )}
                 </div>
                 <div className="max-h-80 overflow-y-auto">
                   {notifs.length === 0 ? (

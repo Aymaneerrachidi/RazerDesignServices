@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { UserPlus, Search, MessageSquare, Briefcase, Mail } from "lucide-react";
+import { UserPlus, Search, MessageSquare, Briefcase, Mail, Trash2 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -23,9 +23,23 @@ interface Artist {
 }
 
 export default function ArtistsPage() {
-  const [artists,  setArtists]  = useState<Artist[]>([]);
-  const [search,   setSearch]   = useState("");
-  const [loading,  setLoading]  = useState(true);
+  const [artists,    setArtists]    = useState<Artist[]>([]);
+  const [search,     setSearch]     = useState("");
+  const [loading,    setLoading]    = useState(true);
+  const [confirmDel, setConfirmDel] = useState<string | null>(null);
+  const [deleting,   setDeleting]   = useState<string | null>(null);
+
+  const removeArtist = async (id: string) => {
+    setDeleting(id);
+    try {
+      const res = await fetch(`/api/users/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setArtists((prev) => prev.filter((a) => a.id !== id));
+      }
+    } catch {}
+    setDeleting(null);
+    setConfirmDel(null);
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -133,6 +147,34 @@ export default function ArtistsPage() {
                       Assign
                     </Button>
                   </Link>
+                </div>
+
+                {/* Delete / confirm row */}
+                <div className="mt-2">
+                  {confirmDel === artist.id ? (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => removeArtist(artist.id)}
+                        disabled={deleting === artist.id}
+                        className="flex-1 text-2xs font-mono text-red-400 border border-red-500/30 rounded-lg py-1.5 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                      >
+                        {deleting === artist.id ? "Removing…" : "Confirm remove"}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDel(null)}
+                        className="flex-1 text-2xs font-mono text-text-muted border border-[var(--border)] rounded-lg py-1.5 hover:bg-white/5 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDel(artist.id)}
+                      className="w-full flex items-center justify-center gap-1.5 text-2xs font-mono text-text-muted hover:text-red-400 transition-colors py-1.5"
+                    >
+                      <Trash2 size={11} /> Remove artist
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
