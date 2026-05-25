@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { MessageSquare, Search, Plus, X } from "lucide-react";
+import { MessageSquare, Search, Plus, X, Trash2 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -29,12 +29,24 @@ interface Artist {
 
 export default function SupervisorChatPage() {
   const router = useRouter();
-  const [convos,    setConvos]    = useState<Conversation[]>([]);
-  const [search,    setSearch]    = useState("");
-  const [loading,   setLoading]   = useState(true);
-  const [showPicker, setShowPicker] = useState(false);
-  const [artists,   setArtists]   = useState<Artist[]>([]);
-  const [starting,  setStarting]  = useState<string | null>(null);
+  const [convos,      setConvos]      = useState<Conversation[]>([]);
+  const [search,      setSearch]      = useState("");
+  const [loading,     setLoading]     = useState(true);
+  const [showPicker,  setShowPicker]  = useState(false);
+  const [artists,     setArtists]     = useState<Artist[]>([]);
+  const [starting,    setStarting]    = useState<string | null>(null);
+  const [confirmDel,  setConfirmDel]  = useState<string | null>(null);
+  const [deletingConv, setDeletingConv] = useState<string | null>(null);
+
+  const deleteConversation = async (id: string) => {
+    setDeletingConv(id);
+    try {
+      const res = await fetch(`/api/conversations/${id}`, { method: "DELETE" });
+      if (res.ok) setConvos((prev) => prev.filter((c) => c.id !== id));
+    } catch {}
+    setDeletingConv(null);
+    setConfirmDel(null);
+  };
 
   useEffect(() => {
     fetch("/api/conversations", { cache: "no-store" })
@@ -166,36 +178,53 @@ export default function SupervisorChatPage() {
         <div className="card-premium rounded-2xl overflow-hidden">
           <div className="neon-line" />
           {filtered.map((conv, i) => (
-            <Link key={conv.id} href={`/supervisor/chat/${conv.id}`}>
-              <div className={cn(
-                "flex items-center gap-4 px-4 py-4 cursor-pointer hover:bg-white/2 transition-colors group",
-                i < filtered.length - 1 && "border-b border-[var(--border)]"
-              )}>
-                <Avatar
-                  name={conv.otherUser?.fullName ?? "?"}
-                  avatar={conv.otherUser?.avatarUrl ?? undefined}
-                  size="md"
-                  showStatus
-                  status={conv.otherUser?.isOnline ? "online" : "offline"}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-display font-bold text-text-primary group-hover:text-neon transition-colors">
-                      {conv.otherUser?.fullName}
+            <div key={conv.id} className={cn(i < filtered.length - 1 && "border-b border-[var(--border)]")}>
+              <div className="flex items-center gap-4 px-4 py-4 hover:bg-white/2 transition-colors group">
+                <Link href={`/supervisor/chat/${conv.id}`} className="flex items-center gap-4 flex-1 min-w-0">
+                  <Avatar
+                    name={conv.otherUser?.fullName ?? "?"}
+                    avatar={conv.otherUser?.avatarUrl ?? undefined}
+                    size="md" showStatus
+                    status={conv.otherUser?.isOnline ? "online" : "offline"}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-sm font-display font-bold text-text-primary group-hover:text-neon transition-colors">
+                        {conv.otherUser?.fullName}
+                      </p>
+                      <span className="text-2xs text-text-muted font-mono">
+                        {formatRelativeTime(conv.lastMessageAt)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-text-muted font-body truncate">
+                      {conv.messages?.[0]?.content ?? "Start a conversation..."}
                     </p>
-                    <span className="text-2xs text-text-muted font-mono">
-                      {formatRelativeTime(conv.lastMessageAt)}
-                    </span>
                   </div>
-                  <p className="text-xs text-text-muted font-body truncate">
-                    {conv.messages?.[0]?.content ?? "Start a conversation..."}
-                  </p>
-                </div>
-                {conv.unreadCount > 0 && (
-                  <span className="badge-count flex-shrink-0">{conv.unreadCount}</span>
+                  {conv.unreadCount > 0 && (
+                    <span className="badge-count flex-shrink-0">{conv.unreadCount}</span>
+                  )}
+                </Link>
+
+                {/* Delete conversation */}
+                {confirmDel === conv.id ? (
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button onClick={() => deleteConversation(conv.id)} disabled={deletingConv === conv.id}
+                      className="text-2xs font-mono text-red-400 border border-red-500/30 rounded-md px-2 py-1 hover:bg-red-500/10 transition-colors disabled:opacity-50">
+                      {deletingConv === conv.id ? "…" : "Delete"}
+                    </button>
+                    <button onClick={() => setConfirmDel(null)}
+                      className="text-2xs font-mono text-text-muted border border-[var(--border)] rounded-md px-2 py-1 hover:bg-white/5 transition-colors">
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => setConfirmDel(conv.id)}
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-text-muted opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-500/8 transition-all flex-shrink-0">
+                    <Trash2 size={13} />
+                  </button>
                 )}
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       )}

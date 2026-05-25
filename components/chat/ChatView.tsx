@@ -2,14 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import {
-  Send,
-  Paperclip,
-  CheckCheck,
-  Check,
-  Smile,
-  Lock,
-  Wifi,
-  WifiOff,
+  Send, Paperclip, CheckCheck, Check, Smile,
+  Lock, Wifi, WifiOff, Pencil, Trash2, X,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -18,8 +12,10 @@ import { getUserStatusColor, formatDateTime, formatRelativeTime } from "@/lib/ut
 import { cn } from "@/lib/utils";
 import type { User } from "@/lib/types";
 
+const EDIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes — must match API
+
 interface ChatViewProps {
-  conversationId: string;      // = artistId
+  conversationId: string;
   currentUser: User;
   otherUser: User;
   privateLabel?: string;
@@ -31,18 +27,26 @@ export function ChatView({
   otherUser,
   privateLabel = "Private Channel",
 }: ChatViewProps) {
-  const { messages, sendMessage, sendTyping, stopTyping, typingUsers, connected, isLoading, error, sendError } =
+  const { messages, sendMessage, editMessage, deleteMessage, sendTyping, stopTyping, typingUsers, connected, isLoading, error, sendError } =
     useRealtimeChat(conversationId);
   const typingUser = Object.values(typingUsers)[0] ?? null;
 
-  const [input, setInput] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [input,      setInput]      = useState("");
+  const [editingId,  setEditingId]  = useState<string | null>(null);
+  const [editDraft,  setEditDraft]  = useState("");
+  const [confirmDel, setConfirmDel] = useState<string | null>(null);
 
-  // Scroll to bottom when messages change
+  const bottomRef  = useRef<HTMLDivElement>(null);
+  const inputRef   = useRef<HTMLInputElement>(null);
+  const editRef    = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, typingUser]);
+
+  useEffect(() => {
+    if (editingId) editRef.current?.focus();
+  }, [editingId]);
 
   const handleSend = async () => {
     const content = input.trim();
@@ -54,19 +58,34 @@ export function ChatView({
   };
 
   const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
-    if (e.target.value.trim()) {
-      sendTyping();
-    } else {
-      stopTyping();
-    }
+    e.target.value.trim() ? sendTyping() : stopTyping();
+  };
+
+  const startEdit = (id: string, content: string) => {
+    setEditingId(id);
+    setEditDraft(content);
+    setConfirmDel(null);
+  };
+
+  const commitEdit = async () => {
+    if (!editingId || !editDraft.trim()) return;
+    await editMessage(editingId, editDraft);
+    setEditingId(null);
+  };
+
+  const handleEditKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") { e.preventDefault(); commitEdit(); }
+    if (e.key === "Escape") setEditingId(null);
+  };
+
+  const handleDelete = async (id: string) => {
+    await deleteMessage(id);
+    setConfirmDel(null);
   };
 
   return (
@@ -74,13 +93,7 @@ export function ChatView({
       {/* Header bar */}
       <div className="card-premium rounded-t-2xl px-5 py-4 border-b border-[var(--border)] flex items-center gap-4 flex-shrink-0 relative overflow-hidden">
         <div className="neon-line absolute top-0 left-0 right-0" />
-        <Avatar
-          name={otherUser.name}
-          avatar={otherUser.avatar}
-          size="md"
-          status={otherUser.status}
-          showStatus
-        />
+        <Avatar name={otherUser.name} avatar={otherUser.avatar} size="md" status={otherUser.status} showStatus />
         <div className="flex-1">
           <p className="text-sm font-display font-bold text-text-primary">{otherUser.name}</p>
           <div className="flex items-center gap-2">
@@ -90,24 +103,17 @@ export function ChatView({
             </span>
             <span className="text-text-muted text-xs">·</span>
             <span className="text-xs text-text-muted font-body truncate max-w-[180px]">
-              {otherUser.bio ?? otherUser.email}
+              {(otherUser as any).bio ?? otherUser.email}
             </span>
           </div>
         </div>
-
-        {/* Connection status */}
-        <div
-          className={cn(
-            "flex items-center gap-1.5 text-2xs font-mono px-3 py-1.5 rounded-full border transition-all duration-500",
-            connected
-              ? "bg-neon/5 border-neon/15 text-neon"
-              : "bg-white/3 border-[var(--border)] text-text-muted"
-          )}
-        >
+        <div className={cn(
+          "flex items-center gap-1.5 text-2xs font-mono px-3 py-1.5 rounded-full border transition-all duration-500",
+          connected ? "bg-neon/5 border-neon/15 text-neon" : "bg-white/3 border-[var(--border)] text-text-muted"
+        )}>
           {connected ? <Wifi size={10} /> : <WifiOff size={10} />}
           {connected ? "Live" : "Syncing"}
         </div>
-
         <div className="flex items-center gap-1.5 text-2xs text-text-muted font-mono bg-white/3 border border-[var(--border)] px-3 py-1.5 rounded-full">
           <Lock size={10} className="text-neon" />
           {privateLabel}
@@ -142,19 +148,18 @@ export function ChatView({
         )}
 
         {!isLoading && messages.map((msg, i) => {
-          const isSelf = msg.senderId === currentUser.id;
-          const msgTime = msg.createdAt;
-          const sender = isSelf ? currentUser : otherUser;
-
-          // Group consecutive messages from same sender (show avatar only on last)
-          const nextMsg = messages[i + 1];
-          const isLastInGroup = !nextMsg || nextMsg.senderId !== msg.senderId;
-
-          // Show timestamp divider if gap > 5 minutes
-          const prevMsg = messages[i - 1];
-          const showTimeDivider =
-            !prevMsg ||
+          const isSelf         = msg.senderId === currentUser.id;
+          const sender         = isSelf ? currentUser : otherUser;
+          const nextMsg        = messages[i + 1];
+          const isLastInGroup  = !nextMsg || nextMsg.senderId !== msg.senderId;
+          const prevMsg        = messages[i - 1];
+          const showTimeDivider = !prevMsg ||
             new Date(msg.createdAt).getTime() - new Date(prevMsg.createdAt).getTime() > 300_000;
+          const isEditing      = editingId === msg.id;
+          const isConfirmDel   = confirmDel === msg.id;
+          const canEdit        = isSelf && (Date.now() - new Date(msg.createdAt).getTime()) < EDIT_WINDOW_MS;
+          // Supervisor can delete any; sender can delete own
+          const canDelete      = isSelf || currentUser.role === "supervisor";
 
           return (
             <div key={msg.id}>
@@ -169,49 +174,93 @@ export function ChatView({
               )}
 
               <div
-                className={cn(
-                  "flex gap-2.5 group",
-                  isSelf ? "flex-row-reverse" : "flex-row",
-                  isLastInGroup ? "mb-3" : "mb-0.5"
-                )}
+                className={cn("flex gap-2.5 group", isSelf ? "flex-row-reverse" : "flex-row", isLastInGroup ? "mb-3" : "mb-0.5")}
                 style={{ animation: "slideUp 0.2s ease-out" }}
               >
-                {/* Avatar — only on last message in group */}
                 <div className="flex-shrink-0 w-7">
-                  {isLastInGroup ? (
+                  {isLastInGroup && (
                     <Avatar name={sender.name ?? (sender as any).fullName} avatar={(sender as any).avatar ?? (sender as any).avatarUrl} size="xs" />
-                  ) : null}
+                  )}
                 </div>
 
                 <div className={cn("flex flex-col max-w-[75%]", isSelf ? "items-end" : "items-start")}>
-                  <div
-                    className={cn(
-                      "px-4 py-2.5 text-sm font-body leading-relaxed break-words",
-                      isSelf
-                        ? "msg-bubble-sent text-text-primary"
-                        : "msg-bubble-received text-text-primary"
-                    )}
-                  >
-                    {msg.content}
-                  </div>
 
-                  {/* Timestamp + read receipt — only on last in group */}
-                  {isLastInGroup && (
-                    <div
-                      className={cn(
-                        "flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity",
-                        isSelf ? "flex-row-reverse" : ""
+                  {/* Action buttons — appear on hover */}
+                  {(canEdit || canDelete) && !isEditing && (
+                    <div className={cn(
+                      "flex items-center gap-1 mb-1 opacity-0 group-hover:opacity-100 transition-opacity",
+                      isSelf ? "flex-row-reverse" : "flex-row"
+                    )}>
+                      {canEdit && (
+                        <button onClick={() => startEdit(msg.id, msg.content ?? "")}
+                          className="w-6 h-6 rounded-md flex items-center justify-center text-text-muted hover:text-neon hover:bg-neon/8 transition-all">
+                          <Pencil size={11} />
+                        </button>
                       )}
-                    >
-                      <span className="text-2xs text-text-muted font-mono">
-                        {formatRelativeTime(msg.createdAt)}
-                      </span>
-                      {isSelf && (
-                        msg.readReceipts?.length > 0 ? (
-                          <CheckCheck size={11} className="text-neon" />
-                        ) : (
-                          <Check size={11} className="text-text-muted" />
-                        )
+                      {canDelete && !isConfirmDel && (
+                        <button onClick={() => { setConfirmDel(msg.id); setEditingId(null); }}
+                          className="w-6 h-6 rounded-md flex items-center justify-center text-text-muted hover:text-red-400 hover:bg-red-500/8 transition-all">
+                          <Trash2 size={11} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Delete confirm */}
+                  {isConfirmDel && (
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <button onClick={() => handleDelete(msg.id)}
+                        className="text-2xs font-mono text-red-400 border border-red-500/30 rounded-md px-2 py-0.5 hover:bg-red-500/10 transition-colors">
+                        Delete
+                      </button>
+                      <button onClick={() => setConfirmDel(null)}
+                        className="text-2xs font-mono text-text-muted border border-[var(--border)] rounded-md px-2 py-0.5 hover:bg-white/5 transition-colors">
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Message bubble / edit input */}
+                  {isEditing ? (
+                    <div className="flex items-center gap-2 w-full">
+                      <input
+                        ref={editRef}
+                        value={editDraft}
+                        onChange={(e) => setEditDraft(e.target.value)}
+                        onKeyDown={handleEditKey}
+                        className="input-base rounded-xl h-9 text-sm font-body px-3 flex-1 min-w-0"
+                      />
+                      <button onClick={commitEdit}
+                        className="w-7 h-7 rounded-lg bg-neon/15 flex items-center justify-center text-neon hover:bg-neon/25 transition-colors flex-shrink-0">
+                        <Check size={13} />
+                      </button>
+                      <button onClick={() => setEditingId(null)}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-text-muted hover:bg-white/5 transition-colors flex-shrink-0">
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className={cn(
+                      "px-4 py-2.5 text-sm font-body leading-relaxed break-words",
+                      isSelf ? "msg-bubble-sent text-text-primary" : "msg-bubble-received text-text-primary"
+                    )}>
+                      {msg.content}
+                      {msg.editedAt && (
+                        <span className="text-2xs text-text-muted font-mono ml-2 opacity-60">edited</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Timestamp + read receipt */}
+                  {isLastInGroup && !isEditing && (
+                    <div className={cn(
+                      "flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity",
+                      isSelf ? "flex-row-reverse" : ""
+                    )}>
+                      <span className="text-2xs text-text-muted font-mono">{formatRelativeTime(msg.createdAt)}</span>
+                      {isSelf && (msg.readReceipts?.length > 0
+                        ? <CheckCheck size={11} className="text-neon" />
+                        : <Check size={11} className="text-text-muted" />
                       )}
                     </div>
                   )}
@@ -223,33 +272,22 @@ export function ChatView({
 
         {/* Typing indicator */}
         {typingUser && (
-          <div
-            className="flex gap-2.5 items-end mb-3"
-            style={{ animation: "slideUp 0.2s ease-out" }}
-          >
+          <div className="flex gap-2.5 items-end mb-3" style={{ animation: "slideUp 0.2s ease-out" }}>
             <Avatar name={otherUser.name} avatar={otherUser.avatar} size="xs" className="flex-shrink-0" />
             <div className="msg-bubble-received px-4 py-3 flex items-center gap-1.5">
               <span className="text-xs text-text-muted font-body mr-1">{typingUser}</span>
               {[0, 1, 2].map((i) => (
-                <span
-                  key={i}
-                  className="w-1.5 h-1.5 rounded-full bg-text-muted"
-                  style={{
-                    animation: `pulseNeon 1.2s ease-in-out infinite`,
-                    animationDelay: `${i * 0.2}s`,
-                  }}
-                />
+                <span key={i} className="w-1.5 h-1.5 rounded-full bg-text-muted"
+                  style={{ animation: `pulseNeon 1.2s ease-in-out infinite`, animationDelay: `${i * 0.2}s` }} />
               ))}
             </div>
           </div>
         )}
-
         <div ref={bottomRef} />
       </div>
 
-      {/* Send error banner */}
       {sendError && (
-        <div className="px-4 py-2 bg-red-500/10 border-t border-red-500/20 flex items-center justify-between">
+        <div className="px-4 py-2 bg-red-500/10 border-t border-red-500/20">
           <p className="text-xs text-red-400 font-body">{sendError}</p>
         </div>
       )}
@@ -260,15 +298,9 @@ export function ChatView({
           <button className="w-9 h-9 rounded-lg flex items-center justify-center text-text-muted hover:text-neon hover:bg-neon/8 transition-all flex-shrink-0">
             <Paperclip size={17} />
           </button>
-
           <div className="flex-1 relative">
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={handleInput}
-              onKeyDown={handleKey}
-              onBlur={stopTyping}
+            <input ref={inputRef} type="text" value={input} onChange={handleInput}
+              onKeyDown={handleKey} onBlur={stopTyping}
               placeholder={`Message ${otherUser.name}…`}
               className="input-base w-full rounded-xl h-11 text-sm font-body px-4 pr-10"
               autoFocus
@@ -277,26 +309,15 @@ export function ChatView({
               <Smile size={16} />
             </button>
           </div>
-
-          <Button
-            onClick={handleSend}
-            disabled={!input.trim()}
-            size="sm"
-            className="h-11 w-11 !px-0 flex-shrink-0"
-            icon={<Send size={16} />}
-          >
+          <Button onClick={handleSend} disabled={!input.trim()} size="sm"
+            className="h-11 w-11 !px-0 flex-shrink-0" icon={<Send size={16} />}>
             {""}
           </Button>
         </div>
-
         <div className="flex items-center justify-center gap-1.5 mt-2">
           <Lock size={10} className="text-text-muted" />
-          <p className="text-2xs text-text-muted font-body">
-            End-to-end private · Press Enter to send
-          </p>
-          {!connected && (
-            <span className="text-2xs text-text-muted font-mono ml-2">Syncs every few seconds</span>
-          )}
+          <p className="text-2xs text-text-muted font-body">End-to-end private · Press Enter to send</p>
+          {!connected && <span className="text-2xs text-text-muted font-mono ml-2">Syncs every few seconds</span>}
         </div>
       </div>
     </div>

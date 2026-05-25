@@ -31,7 +31,9 @@ interface DBMessage {
 
 interface UseRealtimeChatReturn {
   messages: DBMessage[];
-  sendMessage: (content: string) => Promise<void>;
+  sendMessage:   (content: string) => Promise<void>;
+  editMessage:   (msgId: string, content: string) => Promise<void>;
+  deleteMessage: (msgId: string) => Promise<void>;
   sendTyping: () => void;
   stopTyping: () => void;
   typingUsers: Record<string, string>;  // userId → userName
@@ -245,5 +247,36 @@ export function useRealtimeChat(conversationId: string): UseRealtimeChatReturn {
     socket.emit("typing:stop", { conversationId });
   }, [connected, socket, conversationId]);
 
-  return { messages, sendMessage, sendTyping, stopTyping, typingUsers, connected, isLoading, error, sendError };
+  // ── Edit message ───────────────────────────────────────────────────────
+  const editMessage = useCallback(async (msgId: string, content: string) => {
+    if (!content.trim()) return;
+    try {
+      const res  = await fetch(`/api/conversations/${conversationId}/messages/${msgId}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ content: content.trim() }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error ?? "Failed to edit");
+      setMessages((prev) => prev.map((m) => (m.id === msgId ? data.data : m)));
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : "Failed to edit message");
+    }
+  }, [conversationId]);
+
+  // ── Delete message ─────────────────────────────────────────────────────
+  const deleteMessage = useCallback(async (msgId: string) => {
+    try {
+      const res  = await fetch(`/api/conversations/${conversationId}/messages/${msgId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error ?? "Failed to delete");
+      setMessages((prev) => prev.filter((m) => m.id !== msgId));
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : "Failed to delete message");
+    }
+  }, [conversationId]);
+
+  return { messages, sendMessage, editMessage, deleteMessage, sendTyping, stopTyping, typingUsers, connected, isLoading, error, sendError };
 }

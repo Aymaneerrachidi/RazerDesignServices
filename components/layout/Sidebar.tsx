@@ -180,8 +180,9 @@ export function SupervisorSidebar({ mobileOpen, onClose }: { mobileOpen?: boolea
     { label: "Submissions", href: "/supervisor/submissions", icon: <FileCheck size={15} />, badge: counts.submissions },
   ];
   const systemNav: NavItem[] = [
-    { label: "Notifications", href: "/supervisor/notifications", icon: <Bell size={15} /> },
-    { label: "Settings",      href: "/supervisor/settings",      icon: <Settings size={15} /> },
+    { label: "Activity Log",   href: "/supervisor/activity",      icon: <History  size={15} /> },
+    { label: "Notifications",  href: "/supervisor/notifications", icon: <Bell     size={15} /> },
+    { label: "Settings",       href: "/supervisor/settings",      icon: <Settings size={15} /> },
   ];
 
   return (
