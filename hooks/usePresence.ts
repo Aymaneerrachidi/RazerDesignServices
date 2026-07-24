@@ -35,17 +35,15 @@ export function usePresence() {
 
     reportingEnabled.current = true;
 
-    const reportOnlineIfVisible = () => {
-      if (reportingEnabled.current && document.visibilityState === "visible") {
+    const reportOnline = () => {
+      if (reportingEnabled.current) {
         void reportPresence(true);
       }
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        reportOnlineIfVisible();
-      } else {
-        void reportPresence(false, true);
+        reportOnline();
       }
     };
 
@@ -53,9 +51,9 @@ export function usePresence() {
       void reportPresence(false, true);
     };
 
-    reportOnlineIfVisible();
+    reportOnline();
     const heartbeat = window.setInterval(
-      reportOnlineIfVisible,
+      reportOnline,
       PRESENCE_HEARTBEAT_MS,
     );
 
@@ -72,4 +70,3 @@ export function usePresence() {
 
   return { markOffline };
 }
-
