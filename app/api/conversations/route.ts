@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 import { isSuperAdmin, isSupervisor, artistCanContactSupervisor, supervisorCanAccessArtist } from "@/lib/permissions";
 import { ok, created, forbidden, unauthorized, error, serverError } from "@/lib/api-response";
+import { withFreshPresence } from "@/lib/presence";
 
 /** GET /api/conversations — List my conversations */
 export async function GET(_req: NextRequest) {
@@ -50,10 +51,15 @@ export async function GET(_req: NextRequest) {
             readReceipts:   { none: { userId } },
           },
         });
+        const participants = conv.participants.map((participant) => ({
+          ...participant,
+          user: withFreshPresence(participant.user),
+        }));
         return {
           ...conv,
+          participants,
           unreadCount: unread,
-          otherUser: conv.participants
+          otherUser: participants
             .find((p) => p.userId !== userId)
             ?.user ?? null,
         };
@@ -126,13 +132,21 @@ export async function POST(req: NextRequest) {
       include: {
         participants: {
           include: {
-            user: { select: { id: true, fullName: true, avatarUrl: true, role: true, isOnline: true } },
+            user: { select: { id: true, fullName: true, avatarUrl: true, role: true, isOnline: true, lastSeenAt: true } },
           },
         },
       },
     });
 
-    if (existing) return ok(existing);
+    if (existing) {
+      return ok({
+        ...existing,
+        participants: existing.participants.map((participant) => ({
+          ...participant,
+          user: withFreshPresence(participant.user),
+        })),
+      });
+    }
 
     // Create new conversation
     const conversation = await prisma.conversation.create({
@@ -147,13 +161,19 @@ export async function POST(req: NextRequest) {
       include: {
         participants: {
           include: {
-            user: { select: { id: true, fullName: true, avatarUrl: true, role: true, isOnline: true } },
+            user: { select: { id: true, fullName: true, avatarUrl: true, role: true, isOnline: true, lastSeenAt: true } },
           },
         },
       },
     });
 
-    return created(conversation);
+    return created({
+      ...conversation,
+      participants: conversation.participants.map((participant) => ({
+        ...participant,
+        user: withFreshPresence(participant.user),
+      })),
+    });
   } catch (err) {
     console.error("[POST /api/conversations]", err);
     return serverError();

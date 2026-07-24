@@ -46,12 +46,6 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
 
-          // Update online status + last seen
-          await prisma.user.update({
-            where: { id: user.id },
-            data: { isOnline: true, lastSeenAt: new Date() },
-          });
-
           await auditLog({
             userId: user.id,
             performedBy: user.id,

@@ -5,6 +5,7 @@ import { isSuperAdmin, isSupervisor, getAccessibleArtistIds } from "@/lib/permis
 import { ok, created, forbidden, unauthorized, serverError, error } from "@/lib/api-response";
 import { hash } from "bcryptjs";
 import { auditLog } from "@/lib/audit";
+import { withFreshPresence } from "@/lib/presence";
 
 /** GET /api/users — List users based on role */
 export async function GET(req: NextRequest) {
@@ -45,7 +46,7 @@ export async function GET(req: NextRequest) {
         },
         orderBy: { createdAt: "desc" },
       });
-      return ok(users);
+      return ok(users.map(withFreshPresence));
     }
 
     if (isSupervisor(user)) {
@@ -72,7 +73,7 @@ export async function GET(req: NextRequest) {
         },
         orderBy: { fullName: "asc" },
       });
-      return ok(artists);
+      return ok(artists.map(withFreshPresence));
     }
 
     return forbidden();

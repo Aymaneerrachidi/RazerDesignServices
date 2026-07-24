@@ -55,5 +55,6 @@ export const config = {
     "/api/upload/:path*",
     "/api/admin/:path*",
     "/api/invites/:path*",
+    "/api/presence/:path*",
   ],
 };

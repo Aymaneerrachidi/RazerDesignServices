@@ -3,6 +3,8 @@
 import React, { createContext, useContext } from "react";
 import { useSession, signIn, signOut } from "next-auth/react";
 import type { User, UserRole } from "./types";
+import { usePresence } from "@/hooks/usePresence";
+import { disconnectSocket } from "@/hooks/useSocket";
 
 interface AuthContextValue {
   user: User | null;
@@ -28,6 +30,7 @@ function mapRole(role?: string | null): UserRole {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
+  const { markOffline } = usePresence();
   const isLoading = status === "loading";
 
   const user: User | null = session?.user
@@ -54,8 +57,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return !result?.error;
   };
 
-  const logout = () => {
-    signOut({ callbackUrl: "/login" });
+  const logout = async () => {
+    disconnectSocket();
+    await markOffline();
+    await signOut({ callbackUrl: "/login" });
   };
 
   return (

@@ -6,6 +6,7 @@ import {
   ok, forbidden, unauthorized, notFound, serverError, requireFields,
 } from "@/lib/api-response";
 import { auditLog } from "@/lib/audit";
+import { withFreshPresence } from "@/lib/presence";
 
 /** GET /api/users/[id] */
 export async function GET(
@@ -37,7 +38,7 @@ export async function GET(
       },
     });
     if (!user) return notFound("User");
-    return ok(user);
+    return ok(withFreshPresence(user));
   } catch (err) {
     return serverError();
   }

@@ -52,3 +52,9 @@ export function useSocket() {
 export function getSocket(): Socket | null {
   return globalSocket;
 }
+
+export function disconnectSocket() {
+  globalSocket?.disconnect();
+  globalSocket = null;
+  connectionAttempted = false;
+}
